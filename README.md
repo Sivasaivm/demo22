@@ -1,82 +1,95 @@
-<p align="center">
-    <a href="http://kitura.io/">
-        <img src="https://landscape.cncf.io/logos/ibm-member.svg" height="100" alt="IBM Cloud">
-    </a>
-</p>
+# GitOps repository
 
-<p align="center">
-    <a href="https://cloud.ibm.com">
-    <img src="https://img.shields.io/badge/IBM%20Cloud-powered-blue.svg" alt="IBM Cloud">
-    </a>
-    <img src="https://img.shields.io/badge/platform-node-lightgrey.svg?style=flat" alt="platform">
-    <img src="https://img.shields.io/badge/license-Apache2-blue.svg?style=flat" alt="Apache 2">
-</p>
+Repository that contains the yaml resources defining the desired state of the configuration for a cluster. The resources are organized to support deployments to multiple clusters.
 
-# TypeScript Microservice or Backend for Frontend with Node.js
+## App of Apps
 
-This Starter Kit Template can be the foundation of a TypeScript Node.js Microservice or Backend for Frontend.
+There are two major types of resources in the repository:
 
+1. ArgoCD configuration
+2. Application "payloads"
 
-## Features
+### ArgoCD configuration
 
-The starter kit provides the following features:
+In ArgoCD, collections of kubernetes resources that are deployed together are called "applications". Applications in ArgoCD are configured using a custom resource definition (CRD) in the cluster which means ArgoCD applications can deploy other ArgoCD applications (called the ["App of Apps pattern"](https://argoproj.github.io/argo-cd/operator-manual/cluster-bootstrapping/#app-of-apps-pattern)). With the "App of Apps pattern", the ArgoCD environment can be bootstrapped with an initial application. That initial bootstrap application can then be updated in the GitOps repository to configure other applications.
 
-- Built with [TypeScript](https://www.typescriptlang.org/)
-- REST services using `typescript-rest` decorators
-- Swagger documentation using `typescript-rest-swagger`
-- Dependency injection using `typescript-ioc` decorators
-- Logging using `bunyan`
-- TDD environment with [Jest](https://jestjs.io/)
-- Pact testing [Pact](https://docs.pact.io/)
-- Jenkins DevOps pipeline that support OpenShift or IKS deployment
+### Application "payloads"
 
-#### Native Application Development
+The ArgoCD configuration points to other paths within the GitOps repository that contain the actual "payload" yaml to provision the applications (the deployments, config maps, etc that make up the applications)/
 
-Install the latest [Node.js](https://nodejs.org/en/download/) 6+ LTS version.
+## Layered components
 
-After you have created a new git repo from this git template, remember to rename the project.
-Edit `package.json` and change the default name to the name you used to create the template.
+In addition to separating the ArgoCD configuration from the application "payloads", the configuration has also been divided into three different "layers" of the cluster configuration:
 
-Once the Node toolchain has been installed, you can download the project dependencies with:
+1. Infrastructure
+2. Shared services
+3. Applications
 
-```bash
-npm install
-npm run build
-npm run start
+### Infrastructure
+
+Foundational elements within the cluster, like namespaces, service accounts, role-based access control, etc. These resources are often managed by the infrastructure team and are required by the other resources.
+
+### Shared Services
+
+Shared services are application components that are used across multiple applications or across the cluster. Often these are operator-based services and managed independently from the applications.
+
+### Applications
+
+The application layer contains the applications deployed to the cluster, using the infrastructure and shared service components.
+
+## Structure
+
+Putting it all together, there are seven different locations for the GitOps content:
+
+1. Bootstrap
+2. Infrastructure ArgoCD configuration
+3. Shared services ArgoCD configuration
+4. Application ArgoCD configuration
+5. Infrastructure payload
+6. Shared services payload
+7. Application payload
+
+![Structure overview](./docs/gitops-structure-overview.png)
+
+This repository implements a simple configuration where all seven collections of resources are stored in a single repository. For more complicated deployments, the resources can be separated into different repositories. For example, if the infrastructure, services, and application configuration is managed by different teams then each layer can be managed in a different gitops repository.
+
+In order to understand where all the pieces that make up the GitOps deployment can be located, the bootstrap repository contains a yaml file that defined the repository and path for each of the seven locations. This file can be used both by humans to understand the layout and by the cli. An example of this file is provided below:
+
+```yaml
+bootstrap:
+  argocd-config:
+    project: 0-bootstrap
+    repo: github.com/myorg/gitops-repo
+    url: https://github.com/myorg/gitops-repo.git
+    path: argocd/0-bootstrap
+infrastructure:
+  argocd-config:
+    project: 1-infrastructure
+    repo: github.com/myorg/gitops-repo
+    url: https://github.com/myorg/gitops-repo.git
+    path: argocd/1-infrastructure
+  payload:
+    repo: github.com/myorg/gitops-repo
+    url: https://github.com/myorg/gitops-repo.git
+    path: payload/1-infrastructure
+services:
+  argocd-config:
+    project: 2-services
+    repo: github.com/myorg/gitops-repo
+    url: https://github.com/myorg/gitops-repo.git
+    path: argocd/2-services
+  payload:
+    repo: github.com/myorg/gitops-repo
+    url: https://github.com/myorg/gitops-repo.git
+    path: payload/2-services
+applications:
+  argocd-config:
+    project: 3-applications
+    repo: github.com/myorg/gitops-repo
+    url: https://github.com/myorg/gitops-repo.git
+    path: argocd/3-applications
+  payload:
+    repo: github.com/myorg/gitops-repo
+    url: https://github.com/myorg/gitops-repo.git
+    path: payload/3-applications
 ```
-
-### Deploying 
-
-Make sure you are logged into the IBM Cloud using the IBM Cloud CLI and have access 
-to your development cluster.
-
-```$bash
-npm i -g @ibmgaragecloud/cloud-native-toolkit-cli
-ibmcloud login -a cloud.ibm.com -r <region> -g <resource group>
-ibmcloud ks cluster-config --cluster <cluster-name>
-kubectl get pods
-
-```
-
-Use the IBM Garage for Cloud CLI to register the GIT Repo with Jenkins environment 
-```$bash
-oc sync <project> --dev
-oc pipeline 
-```
-
-## More Details
-
-For more details on how to use this Starter Kit Template please review the [IBM Garage for Cloud Developer Tools Developer Guide](https://ibm-garage-cloud.github.io/ibm-garage-developer-guide/)
-
-## Next Steps
-
-* Learn more about augmenting your Node.js applications on IBM Cloud with the [Node Programming Guide](https://cloud.ibm.com/docs/node?topic=nodejs-getting-started).
-
-## License
-
-This sample application is licensed under the Apache License, Version 2. Separate third-party code objects invoked within this code pattern are licensed by their respective providers pursuant to their own separate licenses. Contributions are subject to the [Developer Certificate of Origin, Version 1.1](https://developercertificate.org/) and the [Apache License, Version 2](https://www.apache.org/licenses/LICENSE-2.0.txt).
-
-[Apache License FAQ](https://www.apache.org/foundation/license-faq.html#WhatDoesItMEAN)
-
-
-
